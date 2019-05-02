@@ -189,6 +189,7 @@ export const LINE_BREAK = '\n'
 export const PREVIEW_DOMPURIFY_CONFIG = {
   // do not forbit `class` because `code` element use class to present language
   FORBID_ATTR: ['style', 'contenteditable'],
+  ADD_ATTR: ['controls'],
   ALLOW_DATA_ATTR: false,
   USE_PROFILES: {
     html: true,
@@ -199,7 +200,7 @@ export const PREVIEW_DOMPURIFY_CONFIG = {
 }
 
 export const EXPORT_DOMPURIFY_CONFIG = {
-  FORBID_ATTR: ['contenteditable'],
+  FORBID_ATTR: ['contenteditable', 'style'],
   ALLOW_DATA_ATTR: false,
   USE_PROFILES: {
     html: true,
