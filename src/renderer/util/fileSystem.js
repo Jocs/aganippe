@@ -1,11 +1,14 @@
-import path from 'path'
-import { clipboard } from 'electron'
-import fse from 'fs-extra'
-import dayjs from 'dayjs'
 import Octokit from '@octokit/rest'
+import cp from 'child_process'
 import { isImageFile } from 'common/filesystem/paths'
-import { dataURItoBlob, getContentHash } from './index'
+import dayjs from 'dayjs'
+import { clipboard } from 'electron'
+import { unlink, writeFileSync } from 'fs'
+import fse from 'fs-extra'
+import { tmpdir } from 'os'
+import path from 'path'
 import axios from '../axios'
+import { dataURItoBlob, getContentHash } from './index'
 
 export const create = (pathname, type) => {
   if (type === 'directory') {
@@ -67,6 +70,7 @@ export const uploadImage = async (pathname, image, preferences) => {
   const { currentUploader } = preferences
   const { owner, repo, branch } = preferences.imageBed.github
   const token = preferences.githubToken
+  const cliScript = preferences.cliScript
   const isPath = typeof image === 'string'
   const MAX_SIZE = 5 * 1024 * 1024
   let re
@@ -128,6 +132,23 @@ export const uploadImage = async (pathname, image, preferences) => {
       })
   }
 
+  const uploadByCliScript = (filepath, name = null) => {
+    let isPath = true
+    if (typeof filepath !== 'string') {
+      isPath = false
+      const data = new Uint8Array(filepath)
+      filepath = path.join(tmpdir(), name || +new Date())
+      writeFileSync(filepath, data)
+    }
+    cp.execFile(cliScript, [filepath], (err, data) => {
+      !isPath && unlink(filepath)
+      if (err) {
+        return rj(err)
+      }
+      re(data.trim())
+    })
+  }
+
   const notification = () => {
     rj('Cannot upload more than 5M image, the image will be copied to the image folder')
   }
@@ -141,6 +162,10 @@ export const uploadImage = async (pathname, image, preferences) => {
       if (size > MAX_SIZE) {
         notification()
       } else {
+        if (currentUploader === 'cliScript') {
+          uploadByCliScript(imagePath)
+          return promise
+        }
         const imageFile = await fse.readFile(imagePath)
         const blobFile = new Blob([imageFile])
         if (currentUploader === 'smms') {
@@ -160,15 +185,22 @@ export const uploadImage = async (pathname, image, preferences) => {
     } else {
       const reader = new FileReader()
       reader.onload = async () => {
-        const blobFile = dataURItoBlob(reader.result, image.name)
-        if (currentUploader === 'smms') {
-          uploadToSMMS(blobFile)
-        } else {
-          uploadByGithub(reader.result, image.name)
+        switch (currentUploader) {
+          case 'cliScript':
+            uploadByCliScript(reader.result, image.name)
+            break
+
+          case 'smms':
+            uploadToSMMS(dataURItoBlob(reader.result, image.name))
+            break
+
+          default:
+            uploadByGithub(reader.result, image.name)
         }
       }
 
-      reader.readAsDataURL(image)
+      const readerFunction = currentUploader === 'cliScript' ? 'readAsArrayBuffer' : 'readAsDataURL'
+      reader[readerFunction](image)
     }
   }
 

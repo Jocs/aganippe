@@ -91,7 +91,8 @@ const state = {
       repo: '',
       branch: ''
     }
-  }
+  },
+  cliScript: ''
 }
 
 const getters = {}
