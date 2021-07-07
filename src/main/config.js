@@ -12,6 +12,7 @@ export const editorWinOptions = Object.freeze({
     nodeIntegration: true,
     webSecurity: false
   },
+  transparent: true,
   useContentSize: true,
   show: true, // Show the window after the app is ready.
   frame: false,
@@ -35,6 +36,7 @@ export const preferencesWinOptions = Object.freeze({
   minimizable: false,
   maximizable: false,
   useContentSize: true,
+  transparent: true,
   show: true,
   frame: false,
   thickFrame: !isOsx,
