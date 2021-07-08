@@ -3,7 +3,7 @@ import fse from 'fs-extra'
 import { exec } from 'child_process'
 import dayjs from 'dayjs'
 import log from 'electron-log'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, nativeTheme } from 'electron'
 import { isChildOfDirectory } from 'common/filesystem/paths'
 import { isLinux, isOsx, isWindows } from '../config'
 import parseArgs from '../cli/parser'
@@ -148,7 +148,8 @@ class App {
       startUpAction,
       defaultDirectoryToOpen,
       autoSwitchTheme,
-      theme
+      theme,
+      overlayMode
     } = preferences.getAll()
 
     if (startUpAction === 'folder' && defaultDirectoryToOpen) {
@@ -206,6 +207,75 @@ class App {
     } else {
       this._createEditorWindow()
     }
+
+    const OVERLAY_SHORTCUT = 'Alt+Shift+N'
+
+    /** Initialize overlay mode settings */
+    const initOverlayMode = () => {
+      BrowserWindow.getAllWindows().forEach(window => {
+        window.setVisibleOnAllWorkspaces(true)
+      })
+
+      // Register global shortcut
+      const ret = globalShortcut.register(OVERLAY_SHORTCUT, () => {
+        const firstWindow = this._windowManager.getActiveWindow()?.browserWindow
+        if (!firstWindow) return null
+
+        const isFocused = firstWindow.isFocused()
+
+        if (isFocused) {
+          // Hide the window
+          BrowserWindow.getAllWindows().forEach(window => {
+            window.hide()
+          })
+          app.hide() // gives back focus to previous app
+        } else {
+          // Show the window
+          app.show()
+          BrowserWindow.getAllWindows().forEach(window => {
+            window.show()
+            window.focus()
+          })
+        }
+      })
+      if (!ret) {
+        console.log('hide/show toggle registration failed')
+      } else {
+        // Cleanup global shortcut
+        app.on('will-quit', () => {
+          globalShortcut.unregisterAll()
+        })
+      }
+    }
+    /** Cleanup overlay mode settings */
+    const destroyOverlayMode = () => {
+      globalShortcut.unregister(OVERLAY_SHORTCUT)
+
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isVisible()) {
+          window.show()
+        }
+        window.setVisibleOnAllWorkspaces(false)
+      })
+
+      app.show()
+    }
+
+    // Overlay mode - window is an overlay, visibility toggled when shortcut is pressed
+    if (overlayMode) {
+      initOverlayMode()
+    }
+    ipcMain.on('mt::set-user-preference', (e, settings) => {
+      if (!settings?.hasOwnProperty('overlayMode')) { return }
+
+      if (settings.overlayMode) {
+        // Bind overlay shortcuts
+        initOverlayMode()
+      } else {
+        // Unbind overlay shortcuts
+        destroyOverlayMode()
+      }
+    })
 
     // this.shortcutCapture = new ShortcutCapture()
     // if (process.env.NODE_ENV === 'development') {
